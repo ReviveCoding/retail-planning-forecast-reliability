@@ -56,3 +56,18 @@ Unsafe claims:
 - Do not claim the GPU quantile model was the global winner.
 - Do not claim production deployment.
 - Do not imply Amazon internal data or Amazon internal systems were used.
+
+## Guarded paper-method upgrade
+
+Added a paper-method-inspired guarded correction experiment combining:
+- PHT-inspired demand-state features
+- expected-path fallback selection
+- GPU residual bias correction
+- conservative alpha gating
+
+The aggressive validation-WAPE policy over-corrected test forecasts, but the conservative/sign-safe alpha policy selected alpha 0.1 and improved test WAPE from 0.0719307 to 0.0717160 while reducing test absolute bias from 5.1701 to 0.4568 versus the rolling baseline.
+
+Claim boundary:
+- Use conservative/sign-safe policy results only.
+- Do not claim aggressive alpha results.
+- Describe this as a paper-method-inspired adaptation, not a direct reproduction of the original PHT or degradation papers.
