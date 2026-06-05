@@ -1,0 +1,25 @@
+﻿seed: 42
+
+sample:
+  n_items: 8
+  n_stores: 3
+  n_days: 210
+  start_date: "2023-01-01"
+  seed: 42
+
+real_data_subset:
+  enabled: true
+  max_items: 250
+  max_stores: 5
+  max_days: 730
+
+driver_validation_subset:
+  enabled: true
+  max_items: 6
+  max_stores: 3
+  max_weeks: 40
+
+paths:
+  m5_raw_dir: "data/raw/m5"
+  favorita_raw_dir: "data/raw/favorita"
+  processed_dir: "outputs/processed"

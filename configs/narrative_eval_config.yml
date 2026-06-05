@@ -1,0 +1,9 @@
+required_caveats:
+  - public or sample retail data
+  - synthetic/proxy planning assumptions
+  - local/offline analytical framework
+review_thresholds:
+  min_numeric_consistency: 0.95
+  min_driver_faithfulness: 1.0
+  max_unsupported_claim_rate: 0.05
+  min_caveat_coverage: 0.95

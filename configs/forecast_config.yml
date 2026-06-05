@@ -1,0 +1,13 @@
+horizons_weeks: [1, 4]
+test_weeks: 12
+lag_weeks: [1, 2, 4, 8]
+rolling_windows: [4, 8]
+models:
+  use_tree_baseline: true
+  random_state: 42
+specialty:
+  gated_residual_correction: true
+  gate_metric: wape
+  validation_weeks: 4
+  lifecycle_cap_weeks: 52
+  random_state: 42

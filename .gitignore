@@ -1,0 +1,14 @@
+﻿.venv/
+__pycache__/
+.pytest_cache/
+*.pyc
+
+configs/data_config.local.yml
+
+data/raw/
+
+outputs/*
+!outputs/.gitkeep
+
+reports/*
+!reports/.gitkeep

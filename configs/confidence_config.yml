@@ -1,0 +1,9 @@
+bootstrap_samples: 200
+placebo_iterations: 100
+confidence_weights:
+  effect_size_strength: 0.25
+  statistical_confidence: 0.20
+  temporal_stability: 0.20
+  placebo_pass_score: 0.20
+  business_impact_weight: 0.10
+  pretrend_quality: 0.05

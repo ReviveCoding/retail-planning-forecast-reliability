@@ -1,0 +1,8 @@
+target_growth_factor: 1.03
+promotion_plan_adjustment: 1.10
+event_adjustment: 1.05
+strategic_override_factor: 1.00
+planned_price_adjustment: 1.00
+safety_stock_factor: 1.15
+capacity_buffer: 1.10
+rolling_peak_window_weeks: 8

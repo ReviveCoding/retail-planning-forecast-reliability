@@ -1,0 +1,13 @@
+drivers:
+  - name: promotion
+    treatment_col: promotion_flag
+    metric_col: units_actual
+    description: Demand lift around promotion weeks.
+  - name: holiday
+    treatment_col: holiday_flag
+    metric_col: units_actual
+    description: Demand shift around holiday weeks.
+  - name: transaction_surge
+    treatment_col: transaction_surge_flag
+    metric_col: units_actual
+    description: Demand pressure during transaction surges.

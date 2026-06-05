@@ -1,0 +1,11 @@
+allowed_claims:
+  - public retail data
+  - sample M5-like retail data
+  - synthetic/proxy planning assumptions
+  - local/offline analytical framework
+forbidden_claims:
+  - Amazon internal
+  - proprietary Amazon data
+  - actual Amazon LTPF
+  - production deployment
+  - production system
