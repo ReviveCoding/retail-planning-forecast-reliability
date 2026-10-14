@@ -107,7 +107,7 @@ src/genai_eval/       template narrative and evidence-grounded evaluation checks
 src/reporting/        markdown report generation
 tests/unit/           fast function-level tests that do not generate artifacts
 tests/integration/    end-to-end tests that run the full local pipeline once and validate generated outputs
-docs/                 methodology, roadmap, real-data guide, Windows run guide, and resume-safe claim guidance
+docs/                 methodology, roadmap, real-data guide, Windows run guide, and evidence qualification guidance
 ```
 
 ## Four integrated subprojects
