@@ -8,8 +8,12 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def load_yaml(path: str | Path) -> dict:
-    with open(ROOT / path if not Path(path).is_absolute() else path, 'r', encoding='utf-8') as f:
-        return yaml.safe_load(f) or {}
+    """Load an absolute YAML path or resolve a relative path from the project root."""
+    config_path = Path(path)
+    if not config_path.is_absolute():
+        config_path = ROOT / config_path
+    with config_path.open("r", encoding="utf-8") as handle:
+        return yaml.safe_load(handle) or {}
 
 
 def ensure_dirs(*dirs: str | Path) -> None:
