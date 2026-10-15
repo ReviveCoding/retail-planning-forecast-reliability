@@ -34,9 +34,11 @@ def score_driver(
     effect = float(ev['effect_mean'].iloc[0]) if len(ev) else 0.0
     n_events = int(ev['n_events'].iloc[0]) if len(ev) and 'n_events' in ev else 0
     effect_values = ev_details['relative_lift'].values if len(ev_details) else []
+    valid_effect_count = int(np.isfinite(np.asarray(effect_values, dtype=float)).sum())
     mean, lo, hi = bootstrap_mean_ci(effect_values, samples=bootstrap_samples)
     effect_strength = _clip01(abs(effect) / 0.5)
-    stat_conf = _clip01(1 / (1 + max(0, hi - lo) / max(abs(mean), 0.05)))
+    # An empty event sample is absence of statistical evidence, not perfect confidence.
+    stat_conf = _clip01(1 / (1 + max(0, hi - lo) / max(abs(mean), 0.05))) if valid_effect_count else 0.0
 
     # stability: compare first half and second half event effects
     mid = df['week_id'].median()
@@ -66,6 +68,7 @@ def score_driver(
         'bootstrap_ci_low': lo,
         'bootstrap_ci_high': hi,
         'bootstrap_samples': bootstrap_samples,
+        'bootstrap_valid_observations': valid_effect_count,
         'placebo_false_positive_rate': placebo_fpr,
         'placebo_iterations': int(pl['placebo_iterations'].iloc[0]) if 'placebo_iterations' in pl else placebo_iterations,
         'pretrend_abs_diff': pretrend_abs_diff,
