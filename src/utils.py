@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from pathlib import Path
-import yaml
+
 import pandas as pd
+import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -30,7 +31,7 @@ def write_csv(df: pd.DataFrame, path: str | Path) -> None:
 def write_md(text: str, path: str | Path) -> None:
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(text, encoding='utf-8')
+    path.write_text(text, encoding="utf-8")
 
 
 def project_path(*parts: str) -> Path:

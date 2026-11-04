@@ -1,10 +1,9 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
-
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT_DIR = ROOT / "outputs" / "specialty"
@@ -69,14 +68,21 @@ def select_policy(val_df: pd.DataFrame, policy_name: str) -> pd.Series:
         ).iloc[0]
 
     if policy_name == "balanced_cost_policy":
-        return val_df.sort_values(["balanced_cost", "coverage_f1"], ascending=[True, False]).iloc[0]
+        return val_df.sort_values(
+            ["balanced_cost", "coverage_f1"], ascending=[True, False]
+        ).iloc[0]
 
     if policy_name == "service_level_policy":
         # For service-level decisions, accept more buffer if it sharply reduces lost sales.
-        return val_df.sort_values(["service_cost", "lost_sales_proxy", "coverage_recall"], ascending=[True, True, False]).iloc[0]
+        return val_df.sort_values(
+            ["service_cost", "lost_sales_proxy", "coverage_recall"],
+            ascending=[True, True, False],
+        ).iloc[0]
 
     if policy_name == "conservative_cost_policy":
-        return val_df.sort_values(["conservative_cost", "coverage_f1"], ascending=[True, False]).iloc[0]
+        return val_df.sort_values(
+            ["conservative_cost", "coverage_f1"], ascending=[True, False]
+        ).iloc[0]
 
     raise ValueError(policy_name)
 
@@ -88,7 +94,9 @@ def pct_change(old: float, new: float, higher_is_better: bool) -> float:
     return float(raw if higher_is_better else -raw)
 
 
-def summarize_against_baseline(df: pd.DataFrame, selected_model: str, split: str) -> dict:
+def summarize_against_baseline(
+    df: pd.DataFrame, selected_model: str, split: str
+) -> dict:
     base = df[(df["split"] == split) & (df["model"] == "baseline_point")].iloc[0]
     sel = df[(df["split"] == split) & (df["model"] == selected_model)].iloc[0]
 
@@ -97,19 +105,29 @@ def summarize_against_baseline(df: pd.DataFrame, selected_model: str, split: str
         "selected_model": selected_model,
         "baseline_coverage_f1": float(base["coverage_f1"]),
         "selected_coverage_f1": float(sel["coverage_f1"]),
-        "coverage_f1_rel_change": pct_change(float(base["coverage_f1"]), float(sel["coverage_f1"]), True),
+        "coverage_f1_rel_change": pct_change(
+            float(base["coverage_f1"]), float(sel["coverage_f1"]), True
+        ),
         "baseline_lost_sales_proxy": float(base["lost_sales_proxy"]),
         "selected_lost_sales_proxy": float(sel["lost_sales_proxy"]),
-        "lost_sales_rel_reduction": pct_change(float(base["lost_sales_proxy"]), float(sel["lost_sales_proxy"]), False),
+        "lost_sales_rel_reduction": pct_change(
+            float(base["lost_sales_proxy"]), float(sel["lost_sales_proxy"]), False
+        ),
         "baseline_overstock_proxy": float(base["overstock_proxy"]),
         "selected_overstock_proxy": float(sel["overstock_proxy"]),
-        "overstock_rel_reduction": pct_change(float(base["overstock_proxy"]), float(sel["overstock_proxy"]), False),
+        "overstock_rel_reduction": pct_change(
+            float(base["overstock_proxy"]), float(sel["overstock_proxy"]), False
+        ),
         "baseline_under_forecast_rate": float(base["under_forecast_rate"]),
         "selected_under_forecast_rate": float(sel["under_forecast_rate"]),
-        "under_forecast_rel_reduction": pct_change(float(base["under_forecast_rate"]), float(sel["under_forecast_rate"]), False),
+        "under_forecast_rel_reduction": pct_change(
+            float(base["under_forecast_rate"]), float(sel["under_forecast_rate"]), False
+        ),
         "baseline_wape": float(base["wape"]),
         "selected_wape": float(sel["wape"]),
-        "wape_rel_reduction": pct_change(float(base["wape"]), float(sel["wape"]), False),
+        "wape_rel_reduction": pct_change(
+            float(base["wape"]), float(sel["wape"]), False
+        ),
     }
 
 
@@ -180,14 +198,25 @@ def main() -> None:
                     "overstock_proxy": float(row["overstock_proxy"]),
                     "under_forecast_rate": float(row["under_forecast_rate"]),
                     "abs_bias": float(row["abs_bias"]),
-                    "coverage_f1_rel_change_vs_baseline": pct_change(float(base_hb["coverage_f1"]), float(row["coverage_f1"]), True),
-                    "lost_sales_rel_reduction_vs_baseline": pct_change(float(base_hb["lost_sales_proxy"]), float(row["lost_sales_proxy"]), False),
-                    "abs_bias_rel_reduction_vs_baseline": pct_change(float(base_hb["abs_bias"]), float(row["abs_bias"]), False),
+                    "coverage_f1_rel_change_vs_baseline": pct_change(
+                        float(base_hb["coverage_f1"]), float(row["coverage_f1"]), True
+                    ),
+                    "lost_sales_rel_reduction_vs_baseline": pct_change(
+                        float(base_hb["lost_sales_proxy"]),
+                        float(row["lost_sales_proxy"]),
+                        False,
+                    ),
+                    "abs_bias_rel_reduction_vs_baseline": pct_change(
+                        float(base_hb["abs_bias"]), float(row["abs_bias"]), False
+                    ),
                 }
             )
 
         high_bias_summary = pd.DataFrame(hb_rows).sort_values(
-            ["abs_bias_rel_reduction_vs_baseline", "coverage_f1_rel_change_vs_baseline"],
+            [
+                "abs_bias_rel_reduction_vs_baseline",
+                "coverage_f1_rel_change_vs_baseline",
+            ],
             ascending=[False, False],
         )
 
@@ -227,7 +256,9 @@ def main() -> None:
         "High-bias rows are reported as diagnostics, not used for global policy selection.",
         best_hb_line,
         "",
-        high_bias_summary.to_markdown(index=False) if len(high_bias_summary) else "No high-bias diagnostic rows available.",
+        high_bias_summary.to_markdown(index=False)
+        if len(high_bias_summary)
+        else "No high-bias diagnostic rows available.",
         "",
         "## Claim boundary",
         "Policy selection uses validation metrics only.",

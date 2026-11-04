@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import sys
 import time
@@ -14,14 +14,14 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.append(str(ROOT / "scripts"))
 
 from run_gpu_residual_experiment import (
-    PANEL_PATH,
     OUT_DIR,
+    PANEL_PATH,
     REPORT_DIR,
+    bias,
+    mae,
     prepare_supervised,
     split_by_time,
     wape,
-    mae,
-    bias,
 )
 
 
@@ -41,7 +41,9 @@ class SmallMLP(nn.Module):
         return self.net(x).squeeze(-1)
 
 
-def metric_row(split: str, model: str, y: np.ndarray, pred: np.ndarray, alpha: float = 0.0) -> dict:
+def metric_row(
+    split: str, model: str, y: np.ndarray, pred: np.ndarray, alpha: float = 0.0
+) -> dict:
     return {
         "split": split,
         "model": model,
@@ -61,7 +63,9 @@ def add_period_feature(df: pd.DataFrame, week_col: str) -> pd.Series:
     return pd.Series(pd.Categorical(df[week_col]).codes % 52, index=df.index)
 
 
-def build_expected_candidates(train: pd.DataFrame, frame: pd.DataFrame, group_cols: list[str], week_col: str) -> dict[str, np.ndarray]:
+def build_expected_candidates(
+    train: pd.DataFrame, frame: pd.DataFrame, group_cols: list[str], week_col: str
+) -> dict[str, np.ndarray]:
     train = train.copy()
     frame = frame.copy()
 
@@ -79,8 +83,12 @@ def build_expected_candidates(train: pd.DataFrame, frame: pd.DataFrame, group_co
     group_mean = train.groupby("_group_key")["target"].mean().to_dict()
     period_mean = train.groupby("_period")["target"].mean().to_dict()
 
-    frame_group = frame["_group_key"].map(group_mean).fillna(global_mean).astype(float).to_numpy()
-    frame_period = frame["_period"].map(period_mean).fillna(global_mean).astype(float).to_numpy()
+    frame_group = (
+        frame["_group_key"].map(group_mean).fillna(global_mean).astype(float).to_numpy()
+    )
+    frame_period = (
+        frame["_period"].map(period_mean).fillna(global_mean).astype(float).to_numpy()
+    )
     frame_roll = frame["baseline_pred"].to_numpy(dtype=float)
 
     candidates = {
@@ -90,17 +98,25 @@ def build_expected_candidates(train: pd.DataFrame, frame: pd.DataFrame, group_co
     }
 
     for beta in [0.10, 0.20, 0.30, 0.40]:
-        candidates[f"roll_group_blend_{beta:.2f}"] = np.maximum((1 - beta) * frame_roll + beta * frame_group, 0.0)
-        candidates[f"roll_period_blend_{beta:.2f}"] = np.maximum((1 - beta) * frame_roll + beta * frame_period, 0.0)
+        candidates[f"roll_group_blend_{beta:.2f}"] = np.maximum(
+            (1 - beta) * frame_roll + beta * frame_group, 0.0
+        )
+        candidates[f"roll_period_blend_{beta:.2f}"] = np.maximum(
+            (1 - beta) * frame_roll + beta * frame_period, 0.0
+        )
         candidates[f"roll_group_period_blend_{beta:.2f}"] = np.maximum(
-            (1 - beta) * frame_roll + 0.5 * beta * frame_group + 0.5 * beta * frame_period,
+            (1 - beta) * frame_roll
+            + 0.5 * beta * frame_group
+            + 0.5 * beta * frame_period,
             0.0,
         )
 
     return candidates
 
 
-def add_dht_proxy(train: pd.DataFrame, frames: list[pd.DataFrame], group_cols: list[str]) -> list[np.ndarray]:
+def add_dht_proxy(
+    train: pd.DataFrame, frames: list[pd.DataFrame], group_cols: list[str]
+) -> list[np.ndarray]:
     # Safer PHT-inspired proxy: sequence-position plus normalized local demand state.
     outs = []
     for frame in frames:
@@ -111,13 +127,21 @@ def add_dht_proxy(train: pd.DataFrame, frames: list[pd.DataFrame], group_cols: l
 
         local_level = f["rolling_mean_4"].fillna(f["baseline_pred"]).astype(float)
         denom = f.groupby(group_cols)["target"].transform("mean").replace(0, np.nan)
-        rel_level = (local_level / denom).replace([np.inf, -np.inf], np.nan).fillna(1.0).clip(0, 2) / 2.0
+        rel_level = (local_level / denom).replace([np.inf, -np.inf], np.nan).fillna(
+            1.0
+        ).clip(0, 2) / 2.0
 
         outs.append((0.5 * raw_progress + 0.5 * rel_level).to_numpy(dtype=float))
     return outs
 
 
-def train_residual_model(train: pd.DataFrame, val: pd.DataFrame, test: pd.DataFrame, feature_cols: list[str], device: torch.device):
+def train_residual_model(
+    train: pd.DataFrame,
+    val: pd.DataFrame,
+    test: pd.DataFrame,
+    feature_cols: list[str],
+    device: torch.device,
+):
     x_mean = train[feature_cols].mean()
     x_std = train[feature_cols].std().replace(0, 1.0).fillna(1.0)
 
@@ -126,7 +150,11 @@ def train_residual_model(train: pd.DataFrame, val: pd.DataFrame, test: pd.DataFr
     y_std = float(np.std(y)) if float(np.std(y)) > 1e-8 else 1.0
 
     def tx(frame: pd.DataFrame) -> np.ndarray:
-        return ((frame[feature_cols] - x_mean) / x_std).fillna(0.0).to_numpy(dtype=np.float32)
+        return (
+            ((frame[feature_cols] - x_mean) / x_std)
+            .fillna(0.0)
+            .to_numpy(dtype=np.float32)
+        )
 
     x_train = tx(train)
     y_train = ((y - y_mean) / y_std).astype(np.float32)
@@ -137,7 +165,11 @@ def train_residual_model(train: pd.DataFrame, val: pd.DataFrame, test: pd.DataFr
     opt = torch.optim.AdamW(model.parameters(), lr=1e-3, weight_decay=1e-4)
     loss_fn = nn.SmoothL1Loss()
 
-    dl = DataLoader(TensorDataset(torch.from_numpy(x_train), torch.from_numpy(y_train)), batch_size=256, shuffle=True)
+    dl = DataLoader(
+        TensorDataset(torch.from_numpy(x_train), torch.from_numpy(y_train)),
+        batch_size=256,
+        shuffle=True,
+    )
 
     start = time.time()
     model.train()
@@ -156,11 +188,17 @@ def train_residual_model(train: pd.DataFrame, val: pd.DataFrame, test: pd.DataFr
         out = []
         with torch.no_grad():
             for i in range(0, len(x), 4096):
-                xb = torch.from_numpy(x[i:i + 4096]).to(device)
+                xb = torch.from_numpy(x[i : i + 4096]).to(device)
                 out.append(model(xb).detach().cpu().numpy())
-        return (np.concatenate(out) if out else np.array([], dtype=float)) * y_std + y_mean
+        return (
+            np.concatenate(out) if out else np.array([], dtype=float)
+        ) * y_std + y_mean
 
-    return pred(x_val), pred(x_test), {"device": str(device), "train_seconds": time.time() - start}
+    return (
+        pred(x_val),
+        pred(x_test),
+        {"device": str(device), "train_seconds": time.time() - start},
+    )
 
 
 def main() -> None:
@@ -187,13 +225,19 @@ def main() -> None:
 
     candidate_rows = []
     for name, pred in val_candidates.items():
-        candidate_rows.append(metric_row("validation", f"expected_candidate__{name}", y_val, pred))
+        candidate_rows.append(
+            metric_row("validation", f"expected_candidate__{name}", y_val, pred)
+        )
     candidate_df = pd.DataFrame(candidate_rows)
 
     baseline_val_wape = wape(y_val, val_candidates["rolling_baseline"])
 
-    best_expected_name = str(candidate_df.sort_values(["wape", "abs_bias"]).iloc[0]["model"]).replace("expected_candidate__", "")
-    best_expected_val_wape = float(candidate_df.sort_values(["wape", "abs_bias"]).iloc[0]["wape"])
+    best_expected_name = str(
+        candidate_df.sort_values(["wape", "abs_bias"]).iloc[0]["model"]
+    ).replace("expected_candidate__", "")
+    best_expected_val_wape = float(
+        candidate_df.sort_values(["wape", "abs_bias"]).iloc[0]["wape"]
+    )
 
     # Critical guard: never allow a structural expected path worse than rolling baseline.
     if best_expected_val_wape <= baseline_val_wape:
@@ -209,17 +253,26 @@ def main() -> None:
     val2["selected_expected_path"] = val_candidates[selected_base_name]
     test2["selected_expected_path"] = test_candidates[selected_base_name]
 
-    dht_train, dht_val, dht_test = add_dht_proxy(train2, [train2, val2, test2], group_cols)
+    dht_train, dht_val, dht_test = add_dht_proxy(
+        train2, [train2, val2, test2], group_cols
+    )
     train2["demand_health_timestep"] = dht_train
     val2["demand_health_timestep"] = dht_val
     test2["demand_health_timestep"] = dht_test
 
-    train2["residual_target"] = y_train - train2["selected_expected_path"].to_numpy(dtype=float)
+    train2["residual_target"] = y_train - train2["selected_expected_path"].to_numpy(
+        dtype=float
+    )
 
-    upgraded_features = feature_cols + ["selected_expected_path", "demand_health_timestep"]
+    upgraded_features = feature_cols + [
+        "selected_expected_path",
+        "demand_health_timestep",
+    ]
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    val_resid, test_resid, meta = train_residual_model(train2, val2, test2, upgraded_features, device)
+    val_resid, test_resid, meta = train_residual_model(
+        train2, val2, test2, upgraded_features, device
+    )
 
     base_val = val2["selected_expected_path"].to_numpy(dtype=float)
     base_test = test2["selected_expected_path"].to_numpy(dtype=float)
@@ -228,8 +281,16 @@ def main() -> None:
     for alpha in np.round(np.linspace(0.0, 1.0, 11), 2):
         val_pred = np.maximum(base_val + alpha * val_resid, 0.0)
         test_pred = np.maximum(base_test + alpha * test_resid, 0.0)
-        alpha_rows.append(metric_row("validation", "guarded_paper_alpha_grid", y_val, val_pred, float(alpha)))
-        alpha_rows.append(metric_row("test", "guarded_paper_alpha_grid", y_test, test_pred, float(alpha)))
+        alpha_rows.append(
+            metric_row(
+                "validation", "guarded_paper_alpha_grid", y_val, val_pred, float(alpha)
+            )
+        )
+        alpha_rows.append(
+            metric_row(
+                "test", "guarded_paper_alpha_grid", y_test, test_pred, float(alpha)
+            )
+        )
 
     alpha_df = pd.DataFrame(alpha_rows)
     val_grid = alpha_df[alpha_df["split"] == "validation"].copy()
@@ -239,8 +300,7 @@ def main() -> None:
     rolling_val_wape = wape(y_val, rolling_val)
 
     eligible = val_grid[
-        (val_grid["wape"] <= rolling_val_wape * 0.995)
-        & (val_grid["alpha"] > 0.0)
+        (val_grid["wape"] <= rolling_val_wape * 0.995) & (val_grid["alpha"] > 0.0)
     ].copy()
 
     # Conservative reliability gate:
@@ -254,14 +314,40 @@ def main() -> None:
     val_selected = np.maximum(base_val + selected_alpha * val_resid, 0.0)
     test_selected = np.maximum(base_test + selected_alpha * test_resid, 0.0)
 
-    metrics = pd.DataFrame([
-        metric_row("validation", "rolling_baseline", y_val, rolling_val, 0.0),
-        metric_row("test", "rolling_baseline", y_test, rolling_test, 0.0),
-        metric_row("validation", f"selected_expected_path__{selected_base_name}", y_val, base_val, 0.0),
-        metric_row("test", f"selected_expected_path__{selected_base_name}", y_test, base_test, 0.0),
-        metric_row("validation", "guarded_pht_expected_gpu_bias", y_val, val_selected, selected_alpha),
-        metric_row("test", "guarded_pht_expected_gpu_bias", y_test, test_selected, selected_alpha),
-    ])
+    metrics = pd.DataFrame(
+        [
+            metric_row("validation", "rolling_baseline", y_val, rolling_val, 0.0),
+            metric_row("test", "rolling_baseline", y_test, rolling_test, 0.0),
+            metric_row(
+                "validation",
+                f"selected_expected_path__{selected_base_name}",
+                y_val,
+                base_val,
+                0.0,
+            ),
+            metric_row(
+                "test",
+                f"selected_expected_path__{selected_base_name}",
+                y_test,
+                base_test,
+                0.0,
+            ),
+            metric_row(
+                "validation",
+                "guarded_pht_expected_gpu_bias",
+                y_val,
+                val_selected,
+                selected_alpha,
+            ),
+            metric_row(
+                "test",
+                "guarded_pht_expected_gpu_bias",
+                y_test,
+                test_selected,
+                selected_alpha,
+            ),
+        ]
+    )
 
     candidate_path = OUT_DIR / "guarded_paper_expected_path_candidates.csv"
     alpha_path = OUT_DIR / "guarded_paper_alpha_grid.csv"
@@ -272,8 +358,13 @@ def main() -> None:
     alpha_df.to_csv(alpha_path, index=False)
     metrics.to_csv(metrics_path, index=False)
 
-    base_test_row = metrics[(metrics["split"] == "test") & (metrics["model"] == "rolling_baseline")].iloc[0]
-    sel_test_row = metrics[(metrics["split"] == "test") & (metrics["model"] == "guarded_pht_expected_gpu_bias")].iloc[0]
+    base_test_row = metrics[
+        (metrics["split"] == "test") & (metrics["model"] == "rolling_baseline")
+    ].iloc[0]
+    sel_test_row = metrics[
+        (metrics["split"] == "test")
+        & (metrics["model"] == "guarded_pht_expected_gpu_bias")
+    ].iloc[0]
 
     lines = [
         "# Guarded Paper-Method Upgrade Report",
@@ -299,7 +390,7 @@ def main() -> None:
         metrics.to_markdown(index=False),
         "",
         "## Expected-path validation candidates",
-        candidate_df.sort_values(['wape', 'abs_bias']).to_markdown(index=False),
+        candidate_df.sort_values(["wape", "abs_bias"]).to_markdown(index=False),
         "",
         "## Claim boundary",
         "This is a guarded paper-method-inspired adaptation. It should be claimed only if validation-selected test metrics improve or remain safely bounded.",
