@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 import re
 
 _NUMBER_RE = re.compile(r"[-+]?\d[\d,]*(?:\.\d+)?")
@@ -8,13 +9,15 @@ def _numbers(text: str) -> list[float]:
     vals = []
     for match in _NUMBER_RE.findall(text):
         try:
-            vals.append(float(match.replace(',', '')))
+            vals.append(float(match.replace(",", "")))
         except ValueError:
             continue
     return vals
 
 
-def numeric_consistency(narrative: str, expected_numbers: list[float], tolerance_digits: int = 2) -> float:
+def numeric_consistency(
+    narrative: str, expected_numbers: list[float], tolerance_digits: int = 2
+) -> float:
     """Score whether expected source-table numbers appear in narrative within tolerance.
 
     This accepts common formatting changes such as commas and minor rounding, making it

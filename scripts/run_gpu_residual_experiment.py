@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import time
 from pathlib import Path
@@ -8,7 +8,6 @@ import pandas as pd
 import torch
 from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
-
 
 ROOT = Path(__file__).resolve().parents[1]
 PANEL_PATH = ROOT / "outputs" / "processed" / "m5_weekly_panel.csv"
@@ -51,13 +50,21 @@ def infer_columns(df: pd.DataFrame) -> tuple[str, str, str, list[str]]:
     unit_candidates = ["units_actual", "target_units", "unit_sales", "sales", "demand"]
     units_col = next((c for c in unit_candidates if c in df.columns), None)
     if units_col is None:
-        units_col = next((c for c in df.columns if "unit" in c.lower() or "sale" in c.lower()), None)
+        units_col = next(
+            (c for c in df.columns if "unit" in c.lower() or "sale" in c.lower()), None
+        )
     if units_col is None:
-        raise ValueError(f"Could not infer units column from columns: {list(df.columns)}")
+        raise ValueError(
+            f"Could not infer units column from columns: {list(df.columns)}"
+        )
 
-    week_col = next((c for c in ["week_id", "week", "date", "week_start"] if c in df.columns), None)
+    week_col = next(
+        (c for c in ["week_id", "week", "date", "week_start"] if c in df.columns), None
+    )
     if week_col is None:
-        raise ValueError(f"Could not infer week/date column from columns: {list(df.columns)}")
+        raise ValueError(
+            f"Could not infer week/date column from columns: {list(df.columns)}"
+        )
 
     group_cols = [c for c in ["item_id", "store_id"] if c in df.columns]
     if not group_cols:
@@ -69,7 +76,9 @@ def infer_columns(df: pd.DataFrame) -> tuple[str, str, str, list[str]]:
     return units_col, week_col, group_cols[0], group_cols
 
 
-def prepare_supervised(panel: pd.DataFrame) -> tuple[pd.DataFrame, list[str], str, list[str]]:
+def prepare_supervised(
+    panel: pd.DataFrame,
+) -> tuple[pd.DataFrame, list[str], str, list[str]]:
     units_col, week_col, item_col, group_cols = infer_columns(panel)
 
     df = panel.copy()
@@ -85,20 +94,31 @@ def prepare_supervised(panel: pd.DataFrame) -> tuple[pd.DataFrame, list[str], st
     for lag in [1, 2, 4]:
         df[f"lag_{lag}"] = g[units_col].shift(lag)
 
-    df["rolling_mean_4"] = g[units_col].transform(lambda s: s.shift(1).rolling(4, min_periods=1).mean())
-    df["rolling_std_4"] = g[units_col].transform(lambda s: s.shift(1).rolling(4, min_periods=2).std()).fillna(0.0)
+    df["rolling_mean_4"] = g[units_col].transform(
+        lambda s: s.shift(1).rolling(4, min_periods=1).mean()
+    )
+    df["rolling_std_4"] = (
+        g[units_col]
+        .transform(lambda s: s.shift(1).rolling(4, min_periods=2).std())
+        .fillna(0.0)
+    )
 
     df["baseline_pred"] = df["rolling_mean_4"].fillna(df["lag_1"])
     df["demand_state_timestep"] = g.cumcount() / 52.0
     df["demand_state_timestep"] = df["demand_state_timestep"].clip(0.0, 1.5)
 
-    price_col = next((c for c in ["price_actual", "sell_price", "price"] if c in df.columns), None)
+    price_col = next(
+        (c for c in ["price_actual", "sell_price", "price"] if c in df.columns), None
+    )
     if price_col is not None:
         df["price_feature"] = pd.to_numeric(df[price_col], errors="coerce")
     else:
         df["price_feature"] = 1.0
 
-    event_col = next((c for c in ["event_flag", "promotion_flag", "promo_flag"] if c in df.columns), None)
+    event_col = next(
+        (c for c in ["event_flag", "promotion_flag", "promo_flag"] if c in df.columns),
+        None,
+    )
     if event_col is not None:
         df["event_feature"] = pd.to_numeric(df[event_col], errors="coerce").fillna(0.0)
     else:
@@ -128,13 +148,15 @@ def prepare_supervised(panel: pd.DataFrame) -> tuple[pd.DataFrame, list[str], st
     return df, feature_cols, week_col, group_cols
 
 
-def split_by_time(df: pd.DataFrame, week_col: str) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+def split_by_time(
+    df: pd.DataFrame, week_col: str
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     weeks = np.array(sorted(df[week_col].dropna().unique()))
     if len(weeks) < 5:
         n = len(df)
         train = df.iloc[: int(n * 0.6)]
-        val = df.iloc[int(n * 0.6): int(n * 0.8)]
-        test = df.iloc[int(n * 0.8):]
+        val = df.iloc[int(n * 0.6) : int(n * 0.8)]
+        test = df.iloc[int(n * 0.8) :]
         return train, val, test
 
     train_end = max(1, int(len(weeks) * 0.6))
@@ -166,8 +188,14 @@ def train_residual_model(
         y_std = 1.0
 
     def make_xy(frame: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
-        x = ((frame[feature_cols] - x_mean) / x_std).fillna(0.0).to_numpy(dtype=np.float32)
-        y = ((frame["residual_target"].to_numpy(dtype=np.float32) - y_mean) / y_std).astype(np.float32)
+        x = (
+            ((frame[feature_cols] - x_mean) / x_std)
+            .fillna(0.0)
+            .to_numpy(dtype=np.float32)
+        )
+        y = (
+            (frame["residual_target"].to_numpy(dtype=np.float32) - y_mean) / y_std
+        ).astype(np.float32)
         return x, y
 
     x_train, y_train = make_xy(train)
@@ -198,7 +226,7 @@ def train_residual_model(
         preds = []
         with torch.no_grad():
             for i in range(0, len(x), 4096):
-                xb = torch.from_numpy(x[i:i + 4096]).to(device)
+                xb = torch.from_numpy(x[i : i + 4096]).to(device)
                 pred = model(xb).detach().cpu().numpy()
                 preds.append(pred)
         pred_scaled = np.concatenate(preds) if preds else np.array([], dtype=float)
@@ -308,7 +336,9 @@ def main() -> None:
     bias_by_group = bias_by_group[bias_by_group["n"] >= 3]
     if len(bias_by_group):
         threshold = bias_by_group["abs_mean_bias"].quantile(0.8)
-        high_bias_groups = bias_by_group[bias_by_group["abs_mean_bias"] >= threshold][group_cols]
+        high_bias_groups = bias_by_group[bias_by_group["abs_mean_bias"] >= threshold][
+            group_cols
+        ]
         high_bias_key = set(map(tuple, high_bias_groups.to_numpy()))
         test_keys = list(map(tuple, test[group_cols].to_numpy()))
         high_bias_mask = np.array([k in high_bias_key for k in test_keys])
@@ -349,9 +379,23 @@ def main() -> None:
     metrics.to_csv(metrics_path, index=False)
     high_bias_metrics.to_csv(high_bias_path, index=False)
 
-    test_base_wape = float(metrics[(metrics["split"] == "test") & (metrics["model"] == "baseline_rolling_mean")]["wape"].iloc[0])
-    test_corr_wape = float(metrics[(metrics["split"] == "test") & (metrics["model"] == "gpu_neural_residual_correction")]["wape"].iloc[0])
-    test_selected_wape = float(metrics[(metrics["split"] == "test") & (metrics["model"] == "validation_gated_selected_forecast")]["wape"].iloc[0])
+    test_base_wape = float(
+        metrics[
+            (metrics["split"] == "test") & (metrics["model"] == "baseline_rolling_mean")
+        ]["wape"].iloc[0]
+    )
+    test_corr_wape = float(
+        metrics[
+            (metrics["split"] == "test")
+            & (metrics["model"] == "gpu_neural_residual_correction")
+        ]["wape"].iloc[0]
+    )
+    test_selected_wape = float(
+        metrics[
+            (metrics["split"] == "test")
+            & (metrics["model"] == "validation_gated_selected_forecast")
+        ]["wape"].iloc[0]
+    )
 
     lines = [
         "# GPU Neural Residual Correction Report",
@@ -378,7 +422,9 @@ def main() -> None:
         metrics.to_markdown(index=False),
         "",
         "## High-bias slice metrics",
-        high_bias_metrics.to_markdown(index=False) if len(high_bias_metrics) else "No high-bias slice rows available.",
+        high_bias_metrics.to_markdown(index=False)
+        if len(high_bias_metrics)
+        else "No high-bias slice rows available.",
         "",
         "## Claim boundary",
         "This is an optional GPU experiment using public/sample retail panels and validation-gated residual correction.",

@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import sys
 import time
@@ -14,26 +14,27 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.append(str(ROOT / "scripts"))
 
 from run_gpu_residual_experiment import (  # noqa: E402
-    PANEL_PATH,
     OUT_DIR,
+    PANEL_PATH,
     REPORT_DIR,
+    bias,
+    mae,
     prepare_supervised,
     split_by_time,
     wape,
-    mae,
-    bias,
 )
 from run_gpu_sequence_residual_experiment import (  # noqa: E402
     build_sequence_arrays,
     high_bias_mask_from_train,
 )
 
-
 QUANTILES = [0.50, 0.80, 0.90]
 
 
 class QuantileAttentionResidual(nn.Module):
-    def __init__(self, n_features: int, lookback: int, d_model: int = 32, nhead: int = 4) -> None:
+    def __init__(
+        self, n_features: int, lookback: int, d_model: int = 32, nhead: int = 4
+    ) -> None:
         super().__init__()
         self.input_proj = nn.Linear(n_features, d_model)
         self.pos = nn.Parameter(torch.zeros(1, lookback, d_model))
@@ -92,8 +93,16 @@ def coverage_metrics(y: np.ndarray, pred: np.ndarray) -> dict:
     else:
         f1 = float("nan")
 
-    lost_sales_proxy = float(np.sum(np.maximum(y - pred, 0.0)) / demand_sum) if demand_sum > 1e-12 else float("nan")
-    overstock_proxy = float(np.sum(np.maximum(pred - y, 0.0)) / demand_sum) if demand_sum > 1e-12 else float("nan")
+    lost_sales_proxy = (
+        float(np.sum(np.maximum(y - pred, 0.0)) / demand_sum)
+        if demand_sum > 1e-12
+        else float("nan")
+    )
+    overstock_proxy = (
+        float(np.sum(np.maximum(pred - y, 0.0)) / demand_sum)
+        if demand_sum > 1e-12
+        else float("nan")
+    )
 
     return {
         "coverage_recall": recall,
@@ -199,7 +208,9 @@ def evaluate_candidate(
 
 def main() -> None:
     if not PANEL_PATH.exists():
-        raise FileNotFoundError(f"{PANEL_PATH} not found. Run: python -m src.main --project all")
+        raise FileNotFoundError(
+            f"{PANEL_PATH} not found. Run: python -m src.main --project all"
+        )
 
     torch.manual_seed(42)
     np.random.seed(42)
@@ -249,14 +260,22 @@ def main() -> None:
     }
 
     for name, mult in fixed_buffers.items():
-        rows.append(evaluate_candidate("validation", name, val_y, val_base * mult, "fixed_buffer"))
-        rows.append(evaluate_candidate("test", name, test_y, test_base * mult, "fixed_buffer"))
+        rows.append(
+            evaluate_candidate(
+                "validation", name, val_y, val_base * mult, "fixed_buffer"
+            )
+        )
+        rows.append(
+            evaluate_candidate("test", name, test_y, test_base * mult, "fixed_buffer")
+        )
 
     for idx, q in enumerate(QUANTILES):
         val_pred = np.maximum(val_base + val_resid_q[:, idx], 0.0)
         test_pred = np.maximum(test_base + test_resid_q[:, idx], 0.0)
         name = f"gpu_quantile_q{int(q * 100)}"
-        rows.append(evaluate_candidate("validation", name, val_y, val_pred, "gpu_quantile"))
+        rows.append(
+            evaluate_candidate("validation", name, val_y, val_pred, "gpu_quantile")
+        )
         rows.append(evaluate_candidate("test", name, test_y, test_pred, "gpu_quantile"))
 
     metrics = pd.DataFrame(rows)
@@ -268,7 +287,9 @@ def main() -> None:
     baseline_val = val_candidates[val_candidates["model"] == "baseline_point"].iloc[0]
     max_allowed_overstock = max(float(baseline_val["overstock_proxy"]) + 0.05, 0.10)
 
-    eligible = val_candidates[val_candidates["overstock_proxy"] <= max_allowed_overstock].copy()
+    eligible = val_candidates[
+        val_candidates["overstock_proxy"] <= max_allowed_overstock
+    ].copy()
     if not len(eligible):
         eligible = val_candidates.copy()
 
@@ -278,7 +299,9 @@ def main() -> None:
     ).iloc[0]
 
     selected_model = str(selected["model"])
-    selected_test = metrics[(metrics["split"] == "test") & (metrics["model"] == selected_model)].iloc[0]
+    selected_test = metrics[
+        (metrics["split"] == "test") & (metrics["model"] == selected_model)
+    ].iloc[0]
 
     hb_mask = high_bias_mask_from_train(
         train_frame=train_frame,
@@ -323,7 +346,9 @@ def main() -> None:
     high_bias.to_csv(high_bias_path, index=False)
     pd.DataFrame([meta]).to_csv(meta_path, index=False)
 
-    baseline_test = metrics[(metrics["split"] == "test") & (metrics["model"] == "baseline_point")].iloc[0]
+    baseline_test = metrics[
+        (metrics["split"] == "test") & (metrics["model"] == "baseline_point")
+    ].iloc[0]
 
     lines = [
         "# GPU Quantile / Asymmetric Buffer Report",
@@ -353,7 +378,9 @@ def main() -> None:
         metrics.to_markdown(index=False),
         "",
         "## High-bias slice metrics",
-        high_bias.to_markdown(index=False) if len(high_bias) else "No high-bias rows available.",
+        high_bias.to_markdown(index=False)
+        if len(high_bias)
+        else "No high-bias rows available.",
         "",
         "## Claim boundary",
         "Use validation metrics only for policy selection.",

@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import sys
 import time
@@ -14,14 +14,14 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.append(str(ROOT / "scripts"))
 
 from run_gpu_residual_experiment import (  # noqa: E402
-    PANEL_PATH,
     OUT_DIR,
+    PANEL_PATH,
     REPORT_DIR,
+    bias,
+    mae,
     prepare_supervised,
     split_by_time,
     wape,
-    mae,
-    bias,
 )
 
 
@@ -49,7 +49,9 @@ class LSTMResidual(nn.Module):
 
 
 class AttentionResidual(nn.Module):
-    def __init__(self, n_features: int, lookback: int, d_model: int = 32, nhead: int = 4) -> None:
+    def __init__(
+        self, n_features: int, lookback: int, d_model: int = 32, nhead: int = 4
+    ) -> None:
         super().__init__()
         self.input_proj = nn.Linear(n_features, d_model)
         self.pos = nn.Parameter(torch.zeros(1, lookback, d_model))
@@ -77,7 +79,9 @@ class AttentionResidual(nn.Module):
         return self.head(pooled).squeeze(-1)
 
 
-def metric_row(split: str, model: str, y: np.ndarray, pred: np.ndarray, alpha: float) -> dict:
+def metric_row(
+    split: str, model: str, y: np.ndarray, pred: np.ndarray, alpha: float
+) -> dict:
     return {
         "split": split,
         "model": model,
@@ -105,7 +109,9 @@ def build_sequence_arrays(
     df = df.sort_values(group_cols + [week_col]).reset_index(drop=True)
 
     x_mean = supervised.loc[list(train_idx), feature_cols].mean()
-    x_std = supervised.loc[list(train_idx), feature_cols].std().replace(0, 1.0).fillna(1.0)
+    x_std = (
+        supervised.loc[list(train_idx), feature_cols].std().replace(0, 1.0).fillna(1.0)
+    )
 
     split_data = {
         "train": {"x": [], "y": [], "target": [], "baseline": [], "groups": []},
@@ -115,7 +121,11 @@ def build_sequence_arrays(
 
     for _, group in df.groupby(group_cols, sort=False):
         group = group.sort_values(week_col).reset_index(drop=True)
-        x_group = ((group[feature_cols] - x_mean) / x_std).fillna(0.0).to_numpy(dtype=np.float32)
+        x_group = (
+            ((group[feature_cols] - x_mean) / x_std)
+            .fillna(0.0)
+            .to_numpy(dtype=np.float32)
+        )
 
         for i in range(lookback - 1, len(group)):
             row_id = int(group.loc[i, "_row_id"])
@@ -133,13 +143,17 @@ def build_sequence_arrays(
             split_data[split]["y"].append(float(group.loc[i, "residual_target"]))
             split_data[split]["target"].append(float(group.loc[i, "target"]))
             split_data[split]["baseline"].append(float(group.loc[i, "baseline_pred"]))
-            split_data[split]["groups"].append(tuple(group.loc[i, group_cols].to_list()))
+            split_data[split]["groups"].append(
+                tuple(group.loc[i, group_cols].to_list())
+            )
 
     for split in split_data:
         if split_data[split]["x"]:
             split_data[split]["x"] = np.stack(split_data[split]["x"]).astype(np.float32)
         else:
-            split_data[split]["x"] = np.empty((0, lookback, len(feature_cols)), dtype=np.float32)
+            split_data[split]["x"] = np.empty(
+                (0, lookback, len(feature_cols)), dtype=np.float32
+            )
         for key in ["y", "target", "baseline"]:
             split_data[split][key] = np.array(split_data[split][key], dtype=np.float32)
 
@@ -165,7 +179,9 @@ def train_sequence_model(
     if model_name == "gpu_lstm_residual":
         model = LSTMResidual(n_features=train_x.shape[-1]).to(device)
     elif model_name == "gpu_attention_residual":
-        model = AttentionResidual(n_features=train_x.shape[-1], lookback=lookback).to(device)
+        model = AttentionResidual(n_features=train_x.shape[-1], lookback=lookback).to(
+            device
+        )
     else:
         raise ValueError(model_name)
 
@@ -239,10 +255,18 @@ def select_alphas(
     alpha_best = float(grid.sort_values(["wape", "abs_bias"]).iloc[0]["alpha"])
 
     eligible = grid[grid["wape"] <= base_wape * 0.99].copy()
-    alpha_conservative = float(eligible.sort_values(["alpha", "wape"]).iloc[0]["alpha"]) if len(eligible) else 0.0
+    alpha_conservative = (
+        float(eligible.sort_values(["alpha", "wape"]).iloc[0]["alpha"])
+        if len(eligible)
+        else 0.0
+    )
 
     bias_eligible = grid[grid["wape"] <= base_wape * 1.01].copy()
-    alpha_bias = float(bias_eligible.sort_values(["abs_bias", "wape"]).iloc[0]["alpha"]) if len(bias_eligible) else 0.0
+    alpha_bias = (
+        float(bias_eligible.sort_values(["abs_bias", "wape"]).iloc[0]["alpha"])
+        if len(bias_eligible)
+        else 0.0
+    )
 
     return {
         "baseline_alpha_0": 0.0,
@@ -273,14 +297,18 @@ def high_bias_mask_from_train(
         return np.ones(len(test_groups), dtype=bool)
 
     threshold = bias_by_group["abs_mean_bias"].quantile(0.8)
-    high_bias_groups = bias_by_group[bias_by_group["abs_mean_bias"] >= threshold][group_cols]
+    high_bias_groups = bias_by_group[bias_by_group["abs_mean_bias"] >= threshold][
+        group_cols
+    ]
     high_bias_key = set(map(tuple, high_bias_groups.to_numpy()))
     return np.array([tuple(g) in high_bias_key for g in test_groups])
 
 
 def main() -> None:
     if not PANEL_PATH.exists():
-        raise FileNotFoundError(f"{PANEL_PATH} not found. Run: python -m src.main --project all")
+        raise FileNotFoundError(
+            f"{PANEL_PATH} not found. Run: python -m src.main --project all"
+        )
 
     torch.manual_seed(42)
     np.random.seed(42)
@@ -339,8 +367,14 @@ def main() -> None:
             val_pred = np.maximum(val_base + alpha * val_resid, 0.0)
             test_pred = np.maximum(test_base + alpha * test_resid, 0.0)
 
-            all_rows.append(metric_row("validation", f"{model_name}__{policy}", val_y, val_pred, alpha))
-            all_rows.append(metric_row("test", f"{model_name}__{policy}", test_y, test_pred, alpha))
+            all_rows.append(
+                metric_row(
+                    "validation", f"{model_name}__{policy}", val_y, val_pred, alpha
+                )
+            )
+            all_rows.append(
+                metric_row("test", f"{model_name}__{policy}", test_y, test_pred, alpha)
+            )
 
             if hb_mask.sum() > 0:
                 hb_y = test_y[hb_mask]
@@ -421,7 +455,9 @@ def main() -> None:
         metrics.to_markdown(index=False),
         "",
         "## High-bias slice metrics",
-        high_bias.to_markdown(index=False) if len(high_bias) else "No high-bias rows available.",
+        high_bias.to_markdown(index=False)
+        if len(high_bias)
+        else "No high-bias rows available.",
         "",
         "## Claim boundary",
         "Use test metrics only for reporting, not for model selection.",

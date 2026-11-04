@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import sys
 from pathlib import Path
@@ -11,19 +11,21 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.append(str(ROOT / "scripts"))
 
 from run_gpu_residual_experiment import (  # noqa: E402
-    PANEL_PATH,
     OUT_DIR,
+    PANEL_PATH,
     REPORT_DIR,
+    bias,
+    mae,
     prepare_supervised,
     split_by_time,
     train_residual_model,
     wape,
-    mae,
-    bias,
 )
 
 
-def metric_row(split: str, model: str, y: np.ndarray, pred: np.ndarray, alpha: float) -> dict:
+def metric_row(
+    split: str, model: str, y: np.ndarray, pred: np.ndarray, alpha: float
+) -> dict:
     return {
         "split": split,
         "model": model,
@@ -77,8 +79,16 @@ def main() -> None:
         val_pred = np.maximum(val_base + alpha * val_resid_pred, 0.0)
         test_pred = np.maximum(test_base + alpha * test_resid_pred, 0.0)
 
-        rows.append(metric_row("validation", "gpu_residual_alpha_grid", val_y, val_pred, float(alpha)))
-        rows.append(metric_row("test", "gpu_residual_alpha_grid", test_y, test_pred, float(alpha)))
+        rows.append(
+            metric_row(
+                "validation", "gpu_residual_alpha_grid", val_y, val_pred, float(alpha)
+            )
+        )
+        rows.append(
+            metric_row(
+                "test", "gpu_residual_alpha_grid", test_y, test_pred, float(alpha)
+            )
+        )
 
     grid = pd.DataFrame(rows)
     val_grid = grid[grid["split"] == "validation"].copy()
@@ -91,7 +101,9 @@ def main() -> None:
     # Among those, prefer smaller alpha to reduce over-correction risk.
     eligible = val_grid[val_grid["wape"] <= base_val_wape * 0.99].copy()
     if len(eligible):
-        alpha_conservative = float(eligible.sort_values(["alpha", "wape"]).iloc[0]["alpha"])
+        alpha_conservative = float(
+            eligible.sort_values(["alpha", "wape"]).iloc[0]["alpha"]
+        )
     else:
         alpha_conservative = 0.0
 
@@ -99,7 +111,9 @@ def main() -> None:
     # This is useful when the business goal is reducing systematic under/over forecast.
     bias_eligible = val_grid[val_grid["wape"] <= base_val_wape * 1.01].copy()
     if len(bias_eligible):
-        alpha_bias_aware = float(bias_eligible.sort_values(["abs_bias", "wape"]).iloc[0]["alpha"])
+        alpha_bias_aware = float(
+            bias_eligible.sort_values(["abs_bias", "wape"]).iloc[0]["alpha"]
+        )
     else:
         alpha_bias_aware = 0.0
 
@@ -136,7 +150,9 @@ def main() -> None:
     high_bias_rows = []
     if len(bias_by_group):
         threshold = bias_by_group["abs_mean_bias"].quantile(0.8)
-        high_bias_groups = bias_by_group[bias_by_group["abs_mean_bias"] >= threshold][group_cols]
+        high_bias_groups = bias_by_group[bias_by_group["abs_mean_bias"] >= threshold][
+            group_cols
+        ]
         high_bias_key = set(map(tuple, high_bias_groups.to_numpy()))
         test_keys = list(map(tuple, test[group_cols].to_numpy()))
         high_bias_mask = np.array([k in high_bias_key for k in test_keys])
@@ -198,7 +214,9 @@ def main() -> None:
         selected.to_markdown(index=False),
         "",
         "## High-bias slice metrics",
-        high_bias.to_markdown(index=False) if len(high_bias) else "No high-bias slice rows available.",
+        high_bias.to_markdown(index=False)
+        if len(high_bias)
+        else "No high-bias slice rows available.",
         "",
         "## Claim boundary",
         "Use test metrics only for reporting, not for model selection.",
